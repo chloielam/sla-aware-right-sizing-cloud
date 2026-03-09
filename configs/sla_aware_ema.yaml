@@ -1,15 +1,18 @@
 {
-  "name": "sla_aware",
-  "policy": "sla_aware",
+  "name": "sla_aware_ema",
+  "policy": "sla_aware_ema",
   "policy_params": {
     "queue_budget": 12.0,
-    "risk_up_threshold": 1.10,
-    "risk_down_threshold": 0.35,
-    "prediction_weight": 0.60,
-    "scale_up_step": 1,
+    "risk_up_threshold": 0.90,
+    "risk_down_threshold": 0.30,
+    "prediction_weight": 0.70,
+    "ema_alpha": 0.45,
+    "trend_gain": 1.80,
+    "volatility_gain": 0.30,
+    "scale_up_step": 2,
     "scale_down_step": 1,
     "history_window": 12,
-    "trend_window": 6
+    "trend_window": 10
   },
   "sim": {
     "min_instances": 2,

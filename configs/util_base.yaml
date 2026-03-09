@@ -1,0 +1,29 @@
+{
+  "name": "util_base",
+  "policy": "util_threshold",
+  "policy_params": {
+    "scale_up_util": 0.76,
+    "scale_down_util": 0.45,
+    "scale_up_step": 2,
+    "scale_down_step": 1,
+    "queue_up_threshold": 16.0,
+    "queue_down_threshold": 5.0,
+    "history_window": 10
+  },
+  "sim": {
+    "min_instances": 2,
+    "max_instances": 36,
+    "initial_instances": 10,
+    "service_rate_qps_per_instance": 1.0,
+    "boot_delay_steps": 2,
+    "cooldown_steps": 3,
+    "base_latency_ms": 500.0,
+    "queue_latency_factor_ms": 1.8,
+    "utilization_penalty_ms": 2200.0,
+    "external_latency_weight": 0.01,
+    "sla_threshold_ms": 2300.0,
+    "cost_per_instance_hour": 1.25,
+    "lookahead_steps": 4,
+    "max_steps": 240
+  }
+}
