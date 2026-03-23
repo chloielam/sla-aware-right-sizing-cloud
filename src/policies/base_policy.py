@@ -8,6 +8,7 @@ class Observation:
     step: int
     timestamp: int
     demand_qps: float
+    service_rate_qps_per_instance: float
     queue_len: float
     latency_p99_ms: float
     utilization: float

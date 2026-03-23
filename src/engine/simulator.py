@@ -101,6 +101,7 @@ class CloudSimulator:
                 step=step,
                 timestamp=point.timestamp,
                 demand_qps=point.demand_qps,
+                service_rate_qps_per_instance=cfg.service_rate_qps_per_instance,
                 queue_len=queue_len,
                 latency_p99_ms=latency_p99,
                 utilization=utilization,
