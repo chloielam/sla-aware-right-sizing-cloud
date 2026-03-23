@@ -1,0 +1,29 @@
+{
+  "name": "forecast_only",
+  "policy": "forecast_only",
+  "policy_params": {
+    "history_window": 8,
+    "forecast_up_threshold": 0.95,
+    "forecast_down_threshold": 0.60,
+    "predicted_utilization_up": 0.82,
+    "predicted_utilization_down": 0.50,
+    "scale_up_step": 2,
+    "scale_down_step": 1
+  },
+  "sim": {
+    "min_instances": 2,
+    "max_instances": 36,
+    "initial_instances": 9,
+    "service_rate_qps_per_instance": 1.0,
+    "boot_delay_steps": 2,
+    "cooldown_steps": 3,
+    "base_latency_ms": 500.0,
+    "queue_latency_factor_ms": 1.8,
+    "utilization_penalty_ms": 2200.0,
+    "external_latency_weight": 0.01,
+    "sla_threshold_ms": 2300.0,
+    "cost_per_instance_hour": 1.25,
+    "lookahead_steps": 5,
+    "max_steps": 240
+  }
+}

@@ -14,10 +14,20 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from src.engine.simulator import CloudSimulator, SimulationConfig, TracePoint
+from src.policies.forecast_only import ForecastOnlyPolicy
 from src.policies.sla_aware import SLAAwarePolicy
 from src.policies.sla_aware_ema import SLAAwareEMA
 from src.policies.static import StaticPolicy
 from src.policies.util_threshold import ReactivePolicy, UtilThresholdPolicy
+
+DEFAULT_CONFIGS = [
+    "static.yaml",
+    "reactive.yaml",
+    "util_base.yaml",
+    "sla_aware.yaml",
+    "sla_aware_ema.yaml",
+    "forecast_only.yaml",
+]
 
 
 def aggregate_metric(
@@ -153,6 +163,8 @@ def build_policy(policy_name: str, run_name: str, params: dict):
     key = policy_name.lower().strip()
     if key == "static":
         return StaticPolicy(run_name, params)
+    if key in {"forecast_only", "forecast-only", "forecast"}:
+        return ForecastOnlyPolicy(run_name, params)
     if key in {"util", "util_threshold", "utilization"}:
         return UtilThresholdPolicy(run_name, params)
     if key in {"reactive", "sla_reactive"}:
@@ -164,23 +176,39 @@ def build_policy(policy_name: str, run_name: str, params: dict):
     raise ValueError(f"unknown policy type: {policy_name}")
 
 
-def build_sim_config(sim_cfg: dict, step_seconds: int, max_steps_override: int | None) -> SimulationConfig:
+def build_sim_config(
+    sim_cfg: dict,
+    step_seconds: int,
+    max_steps_override: int | None,
+    boot_delay_override: int | None,
+    sla_threshold_override: float | None,
+    max_instances_override: int | None,
+) -> SimulationConfig:
     max_steps = int(sim_cfg.get("max_steps", 240))
     if max_steps_override is not None:
         max_steps = max_steps_override
+    boot_delay_steps = int(sim_cfg.get("boot_delay_steps", 2))
+    if boot_delay_override is not None:
+        boot_delay_steps = boot_delay_override
+    sla_threshold_ms = float(sim_cfg.get("sla_threshold_ms", 3000.0))
+    if sla_threshold_override is not None:
+        sla_threshold_ms = sla_threshold_override
+    max_instances = int(sim_cfg.get("max_instances", 30))
+    if max_instances_override is not None:
+        max_instances = max_instances_override
     return SimulationConfig(
         min_instances=int(sim_cfg.get("min_instances", 1)),
-        max_instances=int(sim_cfg.get("max_instances", 30)),
+        max_instances=max_instances,
         initial_instances=int(sim_cfg.get("initial_instances", 8)),
         service_rate_qps_per_instance=float(sim_cfg.get("service_rate_qps_per_instance", 0.08)),
         step_seconds=int(sim_cfg.get("step_seconds", step_seconds)),
-        boot_delay_steps=int(sim_cfg.get("boot_delay_steps", 2)),
+        boot_delay_steps=boot_delay_steps,
         cooldown_steps=int(sim_cfg.get("cooldown_steps", 2)),
         base_latency_ms=float(sim_cfg.get("base_latency_ms", 550.0)),
         queue_latency_factor_ms=float(sim_cfg.get("queue_latency_factor_ms", 2.0)),
         utilization_penalty_ms=float(sim_cfg.get("utilization_penalty_ms", 1800.0)),
         external_latency_weight=float(sim_cfg.get("external_latency_weight", 0.05)),
-        sla_threshold_ms=float(sim_cfg.get("sla_threshold_ms", 3000.0)),
+        sla_threshold_ms=sla_threshold_ms,
         cost_per_instance_hour=float(sim_cfg.get("cost_per_instance_hour", 1.25)),
         max_steps=max_steps,
         lookahead_steps=int(sim_cfg.get("lookahead_steps", 4)),
@@ -223,14 +251,46 @@ def parse_args() -> argparse.Namespace:
         default=1.0,
         help="manual multiplier applied after qps interpretation",
     )
+    parser.add_argument(
+        "--scenario-name",
+        default="custom",
+        help="label attached to summaries and series for this benchmark scenario",
+    )
+    parser.add_argument(
+        "--result-tag",
+        default="",
+        help="optional output subdirectory name under processed-dir for this run",
+    )
+    parser.add_argument(
+        "--boot-delay-override",
+        type=int,
+        default=None,
+        help="override boot_delay_steps for every config in this run",
+    )
+    parser.add_argument(
+        "--sla-threshold-override",
+        type=float,
+        default=None,
+        help="override sla_threshold_ms for every config in this run",
+    )
+    parser.add_argument(
+        "--max-instances-override",
+        type=int,
+        default=None,
+        help="override max_instances for every config in this run",
+    )
     return parser.parse_args()
 
 
 def main() -> None:
     args = parse_args()
     data_dir = (ROOT / args.data_dir).resolve()
-    processed_dir = (ROOT / args.processed_dir).resolve()
-    config_paths = [Path(p).resolve() for p in args.configs] if args.configs else sorted((ROOT / "configs").glob("*.yaml"))
+    processed_dir_root = (ROOT / args.processed_dir).resolve()
+    processed_dir = processed_dir_root / args.result_tag if args.result_tag else processed_dir_root
+    if args.configs:
+        config_paths = [Path(p).resolve() for p in args.configs]
+    else:
+        config_paths = [(ROOT / "configs" / name).resolve() for name in DEFAULT_CONFIGS]
     if not config_paths:
         raise RuntimeError("No configs found. Add configs/*.yaml or pass --configs")
 
@@ -249,13 +309,42 @@ def main() -> None:
         conf = load_config(config_path)
         run_name = conf.get("name", config_path.stem)
         policy = build_policy(conf.get("policy", run_name), run_name, conf.get("policy_params", {}))
-        sim_config = build_sim_config(conf.get("sim", {}), inferred_step_seconds, args.max_steps)
+        sim_config = build_sim_config(
+            conf.get("sim", {}),
+            inferred_step_seconds,
+            args.max_steps,
+            args.boot_delay_override,
+            args.sla_threshold_override,
+            args.max_instances_override,
+        )
         simulator = CloudSimulator(sim_config, policy, trace)
         summary, series = simulator.run()
         summary["config"] = config_path.name
+        summary["scenario_name"] = args.scenario_name
+        summary["qps_mode"] = args.qps_mode
+        summary["qps_agg"] = args.qps_agg
+        summary["qps_scale"] = args.qps_scale
+        summary["qps_request_type"] = args.qps_request_type
+        summary["bucket_seconds"] = args.bucket_seconds
+        summary["boot_delay_steps"] = sim_config.boot_delay_steps
+        summary["cooldown_steps"] = sim_config.cooldown_steps
+        summary["sla_threshold_ms"] = sim_config.sla_threshold_ms
+        summary["lookahead_steps"] = sim_config.lookahead_steps
+        summary["service_rate_qps_per_instance"] = sim_config.service_rate_qps_per_instance
+        summary["max_instances"] = sim_config.max_instances
         summaries.append(summary)
 
         if args.write_series:
+            for row in series:
+                row["config"] = config_path.name
+                row["scenario_name"] = args.scenario_name
+                row["qps_mode"] = args.qps_mode
+                row["qps_agg"] = args.qps_agg
+                row["qps_scale"] = args.qps_scale
+                row["qps_request_type"] = args.qps_request_type
+                row["sla_threshold_ms"] = sim_config.sla_threshold_ms
+                row["boot_delay_steps"] = sim_config.boot_delay_steps
+                row["max_instances"] = sim_config.max_instances
             out = processed_dir / f"{run_name}_series.csv"
             with out.open("w", newline="") as f:
                 writer = csv.DictWriter(f, fieldnames=list(series[0].keys()))
