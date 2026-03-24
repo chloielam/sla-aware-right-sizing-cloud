@@ -69,13 +69,14 @@ class CloudSimulator:
                     still_pending.append((ready_step, count))
             pending_scaleups = still_pending
             active = max(cfg.min_instances, min(cfg.max_instances, active + newly_ready))
+            active_for_step = active
 
             arrivals = max(0.0, point.demand_qps) * cfg.step_seconds
-            capacity = active * cfg.service_rate_qps_per_instance * cfg.step_seconds
+            capacity = active_for_step * cfg.service_rate_qps_per_instance * cfg.step_seconds
             queue_len = max(0.0, queue_len + arrivals - capacity)
             utilization = arrivals / max(1e-6, capacity)
             util_hist.append(min(utilization, 1.5))
-            inst_hist.append(active)
+            inst_hist.append(active_for_step)
 
             model_p99 = (
                 cfg.base_latency_ms
@@ -105,7 +106,7 @@ class CloudSimulator:
                 queue_len=queue_len,
                 latency_p99_ms=latency_p99,
                 utilization=utilization,
-                active_instances=active,
+                active_instances=active_for_step,
                 min_instances=cfg.min_instances,
                 max_instances=cfg.max_instances,
                 sla_threshold_ms=cfg.sla_threshold_ms,
@@ -119,9 +120,11 @@ class CloudSimulator:
             )
             target = self.policy.decide_target_instances(obs)
 
-            if target > active:
-                pending_scaleups.append((step + cfg.boot_delay_steps, target - active))
-            elif target < active and step >= cooldown_until:
+            pending_instances = sum(count for _, count in pending_scaleups)
+            scaleup_deficit = target - (active_for_step + pending_instances)
+            if scaleup_deficit > 0:
+                pending_scaleups.append((step + cfg.boot_delay_steps, scaleup_deficit))
+            elif target < active_for_step and step >= cooldown_until:
                 active = target
                 cooldown_until = step + cfg.cooldown_steps
 
@@ -131,14 +134,14 @@ class CloudSimulator:
             if violated:
                 violating_requests += arrivals
 
-            billed_instance_hours += active * (cfg.step_seconds / 3600.0)
+            billed_instance_hours += active_for_step * (cfg.step_seconds / 3600.0)
             time_series.append(
                 {
                     "step": step,
                     "timestamp": point.timestamp,
                     "policy": self.policy.name,
                     "prediction_algorithm": getattr(self.policy, "algorithm_name", self.policy.name),
-                    "instances": active,
+                    "instances": active_for_step,
                     "target_instances": target,
                     "arrivals": round(arrivals, 4),
                     "queue_len": round(queue_len, 4),

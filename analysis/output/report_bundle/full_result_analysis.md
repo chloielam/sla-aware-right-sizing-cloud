@@ -82,9 +82,11 @@ Interpretation:
 
 ## Overscaling
 
+- `forecast_only` shows 155 benign scale-up steps.
 - `reactive` shows 2 benign scale-up steps.
-- `sla_aware` shows 27 benign scale-up steps.
-- `sla_aware_ema` shows 14 benign scale-up steps.
+- `sla_aware_ema_tuned` shows 113 benign scale-up steps.
+- `sla_aware_tuned` shows 66 benign scale-up steps.
+- `sla_required_capacity` shows 8 benign scale-up steps.
 - `util_base` shows 23 benign scale-up steps.
 
 ## Case Study Windows

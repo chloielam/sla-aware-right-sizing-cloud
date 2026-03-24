@@ -158,7 +158,7 @@ where violating requests for a step equal all arrivals in that step if the step 
 
 At each step:
 
-- `billed_instance_hours += active_instances * (step_seconds / 3600)`
+- `billed_instance_hours += active_instances_used_in_step * (step_seconds / 3600)`
 
 Estimated dollar cost:
 
@@ -169,6 +169,8 @@ Estimated dollar cost:
 Resource efficiency is reported as:
 
 - `resource_efficiency = min(1.0, average(utilization_history))`
+
+The utilization history is computed from the same active instance count that actually served each step.
 
 ## 4. Prediction Signals Exposed to Policies
 
@@ -208,9 +210,16 @@ The simulator stores the last `20` step-level SLA outcomes:
 
 ### 5.1 Scale-up
 
-If `target_instances > active_instances`, the difference is queued as:
+If `target_instances` exceeds the capacity that is already active or already pending, only the unmet deficit is queued.
 
-- `(current_step + boot_delay_steps, target - active)`
+Operationally:
+
+- the simulator sums all still-pending scale-up requests
+- it computes `scaleup_deficit = target_instances - (active_instances + pending_instances)`
+- if `scaleup_deficit > 0`, it queues:
+- `(current_step + boot_delay_steps, scaleup_deficit)`
+
+This prevents repeated double-counting of the same desired scale-up while new instances are still booting.
 
 Instances only become active when the ready step arrives.
 
@@ -222,6 +231,20 @@ If `target_instances < active_instances` and the simulator is not in cooldown:
 - `cooldown_until = current_step + cooldown_steps`
 
 This asymmetry makes the policies more sensitive to boot delay than to scale-down delay.
+
+The scale-down decision is made during the current step, but the metrics recorded for that step still correspond to the instance count that actually served the current step before the scale-down took effect.
+
+So for each step, the recorded:
+
+- queue length
+- utilization
+- latency
+- `instances`
+- and billed instance-hours
+
+all reflect the active capacity used during that step.
+
+The reduced instance count affects subsequent steps.
 
 ## 6. Policy Definitions
 
@@ -734,6 +757,52 @@ Simulation coefficients:
 - `cost_per_instance_hour = 1.25`
 - `lookahead_steps = 5`
 
+## 6.8 Untuned EMA SLA-Aware Baseline
+
+Implementation: [sla_aware_ema.py](/Users/truclam/Documents/MUN/Winter%202026/COMP6910/Project/sla-aware/src/policies/sla_aware_ema.py)
+
+This older baseline uses the same EMA-based controller structure as the tuned EMA policy, but with a much more aggressive parameterization.
+
+Important parameter note:
+
+- the active forecast coefficient name is `forecast_weight`
+- older notes may refer to `prediction_weight`, but that is not the parameter currently read by the implementation
+
+Current untuned EMA coefficients:
+
+- `queue_budget = 12.0`
+- `risk_up_threshold = 0.90`
+- `risk_down_threshold = 0.30`
+- `forecast_weight = 0.70`
+- `ema_alpha = 0.45`
+- `trend_gain = 1.80`
+- `volatility_gain = 0.30`
+- `scale_up_step = 2`
+- `scale_down_step = 1`
+- `history_window = 12`
+- `trend_window = 10`
+
+Simulation coefficients:
+
+- `min_instances = 2`
+- `max_instances = 36`
+- `initial_instances = 9`
+- `service_rate_qps_per_instance = 1.0`
+- `boot_delay_steps = 2`
+- `cooldown_steps = 3`
+- `base_latency_ms = 500.0`
+- `queue_latency_factor_ms = 1.8`
+- `utilization_penalty_ms = 2200.0`
+- `external_latency_weight = 0.01`
+- `sla_threshold_ms = 2300.0`
+- `cost_per_instance_hour = 1.25`
+- `lookahead_steps = 5`
+
+Interpretation:
+
+- this untuned EMA baseline is retained mainly for comparison against the tuned EMA controller
+- it is not the preferred headline result in the current report
+
 ## 7. EMA Ablation Variants
 
 All ablation variants inherit the tuned EMA structure and change only selected coefficients.
@@ -866,6 +935,13 @@ This separation is useful in the report because it lets the tuned SLA-aware poli
 
 - a cheap capacity-planning heuristic
 - and a more aggressive forecast-driven proactive controller
+
+Under the corrected simulator accounting, the current headline interpretation is:
+
+- `util_base` is the strongest reactive baseline
+- `sla_required_capacity` is a simple proactive baseline
+- `forecast_only` is a strong but expensive proactive upper-bound baseline
+- `sla_aware_ema_tuned` is the strongest overall SLA-aware candidate in the current setup
 
 Each time-series file includes:
 

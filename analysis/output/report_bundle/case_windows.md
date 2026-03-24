@@ -11,6 +11,6 @@ Suggested report usage:
 - `stable`: discuss cost control and downscaling behavior.
 - `recovery`: discuss whether policies safely scale down after demand declines.
 
-- `burst` sample stats from `reactive`: avg_instances=3.80, avg_p99=889.5, violation_steps=2
-- `stable` sample stats from `reactive`: avg_instances=2.00, avg_p99=553.6, violation_steps=0
-- `recovery` sample stats from `reactive`: avg_instances=10.50, avg_p99=614.0, violation_steps=1
+- `burst` sample stats from `sla_aware_ema_tuned`: avg_instances=7.07, avg_p99=567.5, violation_steps=0
+- `stable` sample stats from `sla_aware_ema_tuned`: avg_instances=2.00, avg_p99=553.6, violation_steps=0
+- `recovery` sample stats from `sla_aware_ema_tuned`: avg_instances=20.43, avg_p99=542.3, violation_steps=0

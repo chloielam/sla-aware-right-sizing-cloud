@@ -164,6 +164,10 @@ def scenario_rows(rows: list[dict], scenario_name: str) -> list[dict]:
     return [row for row in rows if row.get("scenario_name", "") == scenario_name]
 
 
+def filter_rows_by_scenarios(rows: list[dict], scenario_names: set[str]) -> list[dict]:
+    return [row for row in rows if row.get("scenario_name", "") in scenario_names]
+
+
 def top_policy_line(row: dict) -> str:
     return (
         f"- `{row.get('policy', '')}`: cost={to_float(row, 'cost_estimate'):.3f}, "
@@ -295,6 +299,14 @@ def scatter_plot(rows: list[dict], x_key: str, y_key: str, output_path: Path, ti
     plt.tight_layout()
     plt.savefig(output_path, dpi=180)
     plt.close()
+
+
+def canonical_main_results_dir(results_dir: Path) -> Path:
+    for name in ("report_main_controlled", "report_main"):
+        candidate = results_dir / name
+        if (candidate / "merged_trace.csv").exists():
+            return candidate
+    return results_dir
 
 
 def load_series(results_dir: Path) -> dict[str, list[dict]]:
@@ -514,17 +526,26 @@ def main() -> None:
         "tail_latency_p99_ms",
     )
 
-    plot_sensitivity(rows, "qps_scale", output_dir / "sensitivity_qps_scale.png", "Sensitivity: QPS Scale")
-    plot_sensitivity(rows, "boot_delay_steps", output_dir / "sensitivity_boot_delay.png", "Sensitivity: Boot Delay")
-    plot_sensitivity(rows, "max_instances", output_dir / "sensitivity_max_instances.png", "Sensitivity: Max Instances")
+    plot_sensitivity(
+        filter_rows_by_scenarios(rows, {"main_controlled", "harder_qps"}),
+        "qps_scale",
+        output_dir / "sensitivity_qps_scale.png",
+        "Sensitivity: QPS Scale",
+    )
+    plot_sensitivity(
+        filter_rows_by_scenarios(rows, {"main_controlled", "harder_boot"}),
+        "boot_delay_steps",
+        output_dir / "sensitivity_boot_delay.png",
+        "Sensitivity: Boot Delay",
+    )
+    plot_sensitivity(
+        filter_rows_by_scenarios(rows, {"main_controlled", "harder_capacity"}),
+        "max_instances",
+        output_dir / "sensitivity_max_instances.png",
+        "Sensitivity: Max Instances",
+    )
 
-    main_results_dir = results_dir
-    if not (main_results_dir / "merged_trace.csv").exists():
-        for name in ("report_main_controlled", "report_main"):
-            candidate = results_dir / name
-            if candidate.exists():
-                main_results_dir = candidate
-                break
+    main_results_dir = canonical_main_results_dir(results_dir)
 
     merged_trace_path = main_results_dir / "merged_trace.csv"
     series_by_policy = load_series(main_results_dir)
