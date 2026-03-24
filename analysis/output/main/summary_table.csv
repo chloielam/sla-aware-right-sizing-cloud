@@ -1,0 +1,7 @@
+scenario_name,policy,prediction_algorithm,cost_estimate,cost_instance_hours,sla_violation_rate,tail_latency_p99_ms,resource_efficiency,steps,qps_scale,sla_threshold_ms,boot_delay_steps
+main,static,static,272.5,218.0,0.031825,1810.4413,0.3839,1090,1.0,2300.0,2
+main,reactive,reactive,116.2917,93.0333,0.052374,2661.71,0.5458,1090,1.0,2300.0,2
+main,util_base,util_base,149.0208,119.2167,0.008146,1462.6362,0.4248,1090,1.0,2300.0,2
+main,sla_aware,heuristic_risk,809.0625,647.25,0.0,627.44,0.09,1090,1.0,2300.0,2
+main,sla_aware_ema,ema_forecast,812.8542,650.2833,0.0,627.44,0.0899,1090,1.0,2300.0,2
+main,forecast_only,forecast_only,622.1667,497.7333,0.0,627.44,0.1382,1090,1.0,2300.0,2

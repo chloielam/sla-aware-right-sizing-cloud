@@ -1,0 +1,28 @@
+{
+  "name": "sla_required_capacity",
+  "policy": "sla_required_capacity",
+  "policy_params": {
+    "target_utilization": 0.85,
+    "demand_mix": 0.70,
+    "latency_headroom_ratio": 0.78,
+    "scale_up_cap": 1,
+    "scale_down_cap": 2,
+    "queue_budget": 16.0
+  },
+  "sim": {
+    "min_instances": 2,
+    "max_instances": 36,
+    "initial_instances": 10,
+    "service_rate_qps_per_instance": 1.0,
+    "boot_delay_steps": 2,
+    "cooldown_steps": 3,
+    "base_latency_ms": 500.0,
+    "queue_latency_factor_ms": 1.8,
+    "utilization_penalty_ms": 2200.0,
+    "external_latency_weight": 0.01,
+    "sla_threshold_ms": 2300.0,
+    "cost_per_instance_hour": 1.25,
+    "lookahead_steps": 4,
+    "max_steps": 240
+  }
+}

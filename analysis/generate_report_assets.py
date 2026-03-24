@@ -24,14 +24,39 @@ def read_csv(path: Path) -> list[dict]:
 
 
 def discover_result_rows(results_dir: Path) -> list[dict]:
+    preferred_reports = [
+        "report_main_controlled",
+        "report_harder_qps",
+        "report_harder_boot",
+        "report_harder_capacity",
+        "report_ablation",
+    ]
+    preferred_paths = [results_dir / name / "benchmark_results.csv" for name in preferred_reports]
+    existing_preferred = [path for path in preferred_paths if path.exists()]
+    if existing_preferred:
+        rows: list[dict] = []
+        for path in existing_preferred:
+            rows.extend(read_csv(path))
+        return rows
+
+    report_paths = sorted(results_dir.glob("report_*/benchmark_results.csv"))
+    if report_paths:
+        rows: list[dict] = []
+        for path in report_paths:
+            rows.extend(read_csv(path))
+        return rows
+
+    nested_paths = sorted(results_dir.glob("*/benchmark_results.csv"))
+    if nested_paths:
+        rows: list[dict] = []
+        for path in nested_paths:
+            rows.extend(read_csv(path))
+        return rows
+
     direct = results_dir / "benchmark_results.csv"
     if direct.exists():
         return read_csv(direct)
-
-    rows: list[dict] = []
-    for path in sorted(results_dir.glob("*/benchmark_results.csv")):
-        rows.extend(read_csv(path))
-    return rows
+    return []
 
 
 def to_float(row: dict, key: str, default: float = 0.0) -> float:
@@ -100,7 +125,13 @@ def write_focused_comparison(rows: list[dict], output_dir: Path) -> None:
     selected = [
         row
         for row in rows
-        if row.get("policy", "") in {"util_base", "sla_aware_tuned", "sla_aware_ema_tuned"}
+        if row.get("policy", "") in {
+            "util_base",
+            "sla_required_capacity",
+            "forecast_only",
+            "sla_aware_tuned",
+            "sla_aware_ema_tuned",
+        }
     ]
     if not selected:
         return
@@ -127,6 +158,119 @@ def write_focused_comparison(rows: list[dict], output_dir: Path) -> None:
             + " |"
         )
     (output_dir / "focused_comparison.md").write_text("\n".join(lines) + "\n")
+
+
+def scenario_rows(rows: list[dict], scenario_name: str) -> list[dict]:
+    return [row for row in rows if row.get("scenario_name", "") == scenario_name]
+
+
+def top_policy_line(row: dict) -> str:
+    return (
+        f"- `{row.get('policy', '')}`: cost={to_float(row, 'cost_estimate'):.3f}, "
+        f"viol_rate={to_float(row, 'sla_violation_rate'):.5f}, "
+        f"p99={to_float(row, 'tail_latency_p99_ms'):.1f}, "
+        f"eff={to_float(row, 'resource_efficiency'):.3f}"
+    )
+
+
+def write_full_analysis_report(
+    rows: list[dict],
+    output_dir: Path,
+    windows: dict[str, tuple[int, int]] | None,
+    series_by_policy: dict[str, list[dict]],
+) -> None:
+    lines = [
+        "# Full Result Analysis",
+        "",
+        "This report consolidates the benchmark summary, focused SLA-aware comparison, scenario-level interpretation, and overscaling diagnostics into one file.",
+        "",
+    ]
+
+    for scenario in ("main_controlled", "harder_qps", "harder_boot", "harder_capacity", "ablation"):
+        current = scenario_rows(rows, scenario)
+        if not current:
+            continue
+        lines.append(f"## {scenario}")
+        lines.append("")
+        for row in sorted(current, key=lambda item: to_float(item, "cost_estimate")):
+            lines.append(top_policy_line(row))
+        lines.append("")
+
+        if scenario != "ablation":
+            util = next((row for row in current if row.get("policy") == "util_base"), None)
+            req = next((row for row in current if row.get("policy") == "sla_required_capacity"), None)
+            forecast = next((row for row in current if row.get("policy") == "forecast_only"), None)
+            ema = next((row for row in current if row.get("policy") == "sla_aware_ema_tuned"), None)
+            heuristic = next((row for row in current if row.get("policy") == "sla_aware_tuned"), None)
+            if util and req and forecast and ema and heuristic:
+                lines.append("Interpretation:")
+                lines.append(
+                    f"- `sla_required_capacity` is the lightweight proactive baseline: cost "
+                    f"{to_float(req, 'cost_estimate'):.3f}, violation rate {to_float(req, 'sla_violation_rate'):.5f}, "
+                    f"p99 {to_float(req, 'tail_latency_p99_ms'):.1f}."
+                )
+                lines.append(
+                    f"- `forecast_only` isolates prediction-driven proactive scaling with cost "
+                    f"{to_float(forecast, 'cost_estimate'):.3f} and p99 {to_float(forecast, 'tail_latency_p99_ms'):.1f}."
+                )
+                lines.append(
+                    f"- `sla_aware_ema_tuned` improves violation rate from {to_float(util, 'sla_violation_rate'):.5f} "
+                    f"to {to_float(ema, 'sla_violation_rate'):.5f} while increasing cost from "
+                    f"{to_float(util, 'cost_estimate'):.3f} to {to_float(ema, 'cost_estimate'):.3f}."
+                )
+                lines.append(
+                    f"- `sla_aware_tuned` reaches similar SLA outcomes with cost {to_float(heuristic, 'cost_estimate'):.3f}."
+                )
+                lines.append("")
+        else:
+            best_p99 = min(current, key=lambda item: to_float(item, "tail_latency_p99_ms"))
+            cheapest = min(current, key=lambda item: to_float(item, "cost_estimate"))
+            lines.append("Interpretation:")
+            lines.append(f"- Lowest p99 variant: `{best_p99.get('policy', '')}`.")
+            lines.append(f"- Lowest cost variant: `{cheapest.get('policy', '')}`.")
+            lines.append("- The ablation is meaningful only if these variants differ in cost or p99.")
+            lines.append("")
+
+    lines.append("## Overscaling")
+    lines.append("")
+    overscaling_policies = []
+    for policy, policy_rows in sorted(series_by_policy.items()):
+        prev_instances = None
+        episodes = 0
+        for row in policy_rows:
+            increasing = prev_instances is not None and to_int(row, "instances") > prev_instances
+            benign = (
+                to_float(row, "utilization") <= 0.35
+                and to_float(row, "queue_len") <= 0.0
+                and to_int(row, "sla_violation") == 0
+            )
+            if increasing and benign:
+                episodes += 1
+            prev_instances = to_int(row, "instances")
+        if episodes > 0:
+            overscaling_policies.append(f"- `{policy}` shows {episodes} benign scale-up steps.")
+    if overscaling_policies:
+        lines.extend(overscaling_policies)
+    else:
+        lines.append("- No overscaling episodes detected under the current diagnostic threshold.")
+    lines.append("")
+
+    if windows:
+        lines.append("## Case Study Windows")
+        lines.append("")
+        for name, (start, end) in windows.items():
+            lines.append(f"- `{name}` window: steps {start} to {end - 1}")
+        lines.append("")
+
+    lines.append("## Bottom Line")
+    lines.append("")
+    lines.append("- Use `util_base` as the strongest low-cost reactive baseline.")
+    lines.append("- Use `sla_required_capacity` as the simple proactive baseline contributed by direct capacity sizing.")
+    lines.append("- Use `sla_aware_ema_tuned` as the strongest current SLA-aware candidate.")
+    lines.append("- Use the ablation section to discuss aggressiveness, prediction, and weak signal contributions.")
+    lines.append("")
+
+    (output_dir / "full_result_analysis.md").write_text("\n".join(lines) + "\n")
 
 
 def scatter_plot(rows: list[dict], x_key: str, y_key: str, output_path: Path, title: str, xlabel: str, ylabel: str) -> None:
@@ -265,7 +409,7 @@ def write_case_notes(series_by_policy: dict[str, list[dict]], windows: dict[str,
     lines.append("")
 
     if series_by_policy:
-        sample_policy = sorted(series_by_policy)[0]
+        sample_policy = "sla_aware_ema_tuned" if "sla_aware_ema_tuned" in series_by_policy else sorted(series_by_policy)[0]
         rows = series_by_policy[sample_policy]
         for name, (start, end) in windows.items():
             window = rows[start:end]
@@ -384,6 +528,7 @@ def main() -> None:
 
     merged_trace_path = main_results_dir / "merged_trace.csv"
     series_by_policy = load_series(main_results_dir)
+    windows: dict[str, tuple[int, int]] | None = None
     if merged_trace_path.exists() and series_by_policy:
         merged_trace = read_csv(merged_trace_path)
         windows = demand_windows(merged_trace, args.window_size)
@@ -391,6 +536,7 @@ def main() -> None:
             plot_window(series_by_policy, name, start, end, output_dir)
         write_case_notes(series_by_policy, windows, output_dir)
         detect_overscaling(series_by_policy, output_dir)
+    write_full_analysis_report(rows, output_dir, windows, series_by_policy)
 
 
 if __name__ == "__main__":

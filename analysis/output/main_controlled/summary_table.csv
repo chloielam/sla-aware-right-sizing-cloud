@@ -1,0 +1,4 @@
+scenario_name,policy,prediction_algorithm,cost_estimate,cost_instance_hours,sla_violation_rate,tail_latency_p99_ms,resource_efficiency,steps,qps_scale,sla_threshold_ms,boot_delay_steps
+main_controlled,util_base,util_base,149.0208,119.2167,0.008146,1462.6362,0.4248,1090,1.0,2300.0,2
+main_controlled,sla_aware_tuned,heuristic_risk,264.2917,211.4333,0.001004,636.07,0.2385,1090,1.0,2300.0,2
+main_controlled,sla_aware_ema_tuned,ema_forecast,250.6875,200.55,0.001004,636.9,0.2638,1090,1.0,2300.0,2

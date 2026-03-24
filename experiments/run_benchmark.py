@@ -17,6 +17,7 @@ from src.engine.simulator import CloudSimulator, SimulationConfig, TracePoint
 from src.policies.forecast_only import ForecastOnlyPolicy
 from src.policies.sla_aware import SLAAwarePolicy
 from src.policies.sla_aware_ema import SLAAwareEMA
+from src.policies.sla_required_capacity import SLARequiredCapacityPolicy
 from src.policies.static import StaticPolicy
 from src.policies.util_threshold import ReactivePolicy, UtilThresholdPolicy
 
@@ -24,6 +25,7 @@ DEFAULT_CONFIGS = [
     "static.yaml",
     "reactive.yaml",
     "util_base.yaml",
+    "sla_required_capacity.yaml",
     "sla_aware.yaml",
     "sla_aware_ema.yaml",
     "forecast_only.yaml",
@@ -173,6 +175,8 @@ def build_policy(policy_name: str, run_name: str, params: dict):
         return SLAAwarePolicy(run_name, params)
     if key in {"sla_aware_ema", "sla-aware-ema", "slaawareema", "sla_aware_ewma"}:
         return SLAAwareEMA(run_name, params)
+    if key in {"sla_required_capacity", "sla-required-capacity", "required_capacity"}:
+        return SLARequiredCapacityPolicy(run_name, params)
     raise ValueError(f"unknown policy type: {policy_name}")
 
 

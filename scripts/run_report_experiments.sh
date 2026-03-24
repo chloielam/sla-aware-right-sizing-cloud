@@ -5,7 +5,11 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT_DIR"
 
 MAIN_CONFIGS=(
+  configs/static.yaml
+  configs/reactive.yaml
   configs/util_base.yaml
+  configs/sla_required_capacity.yaml
+  configs/forecast_only.yaml
   configs/sla_aware_tuned.yaml
   configs/sla_aware_ema_tuned.yaml
 )
@@ -70,5 +74,4 @@ python3 experiments/run_benchmark.py \
   --boot-delay-override 4 \
   --max-instances-override 18
 
-python3 analysis/generate_report_assets.py --results-dir data/processed/report_main_controlled --output-dir analysis/output/main_controlled
-python3 analysis/generate_report_assets.py --results-dir data/processed --output-dir analysis/output/report_bundle
+python3 analysis/generate_report_assets.py --results-dir data/processed --output-dir analysis/output/report_full
