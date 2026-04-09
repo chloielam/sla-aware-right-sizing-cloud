@@ -6,6 +6,11 @@ env/
 
 data/processed/
 
+# Markdown docs
+*.md
+**/*.md
+!/README.md
+
 # Python cache/artifacts
 __pycache__/
 *.py[cod]

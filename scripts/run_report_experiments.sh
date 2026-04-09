@@ -8,19 +8,17 @@ MAIN_CONFIGS=(
   configs/static.yaml
   configs/reactive.yaml
   configs/util_base.yaml
-  configs/sla_required_capacity.yaml
   configs/forecast_only.yaml
-  configs/sla_aware_tuned.yaml
-  configs/sla_aware_ema_tuned.yaml
+  configs/sla_aware.yaml
 )
 
 ABLATION_CONFIGS=(
-  configs/sla_aware_ema_tuned.yaml
-  configs/sla_aware_ema_no_prediction.yaml
-  configs/sla_aware_ema_no_queue_external.yaml
-  configs/sla_aware_ema_no_violation.yaml
-  configs/sla_aware_ema_low_aggr.yaml
-  configs/sla_aware_ema_high_aggr.yaml
+  configs/sla_aware.yaml
+  configs/sla_aware_no_prediction.yaml
+  configs/sla_aware_no_queue.yaml
+  configs/sla_aware_no_latency.yaml
+  configs/sla_aware_low_aggr.yaml
+  configs/sla_aware_high_aggr.yaml
 )
 
 python3 experiments/run_benchmark.py \

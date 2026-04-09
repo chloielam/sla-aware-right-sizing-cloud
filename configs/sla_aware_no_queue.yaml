@@ -1,14 +1,14 @@
 {
-  "name": "sla_aware",
+  "name": "sla_aware_no_queue",
   "policy": "sla_aware",
   "policy_params": {
     "queue_budget": 12.0,
     "latency_floor_ratio": 0.70,
     "risk_up_threshold": 0.26,
     "risk_down_threshold": 0.10,
-    "latency_weight": 0.50,
-    "queue_weight": 0.30,
-    "demand_weight": 0.20,
+    "latency_weight": 0.70,
+    "queue_weight": 0.0,
+    "demand_weight": 0.30,
     "hard_latency_ratio": 0.89,
     "hard_queue_threshold": 7.0,
     "hard_demand_rush_ratio": 0.25,
